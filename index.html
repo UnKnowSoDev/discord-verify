@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Aim Verification</title>
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Rajdhani:wght@500;700&display=swap" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+
+    <style>
+        :root {
+            --bg: #0a0a0a;
+            --text: #ffffff;
+            --accent: #444;
+            --target-glow: 0 0 15px rgba(255, 255, 255, 0.8);
+        }
+
+        body {
+            background-color: var(--bg);
+            color: var(--text);
+            font-family: 'Rajdhani', sans-serif;
+            margin: 0;
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            overflow: hidden;
+            user-select: none;
+            cursor: default;
+        }
+
+        /* Login Screen Styles */
+        .container {
+            text-align: center;
+            width: 100%;
+            max-width: 500px;
+            z-index: 10;
+        }
+
+        .box-frame {
+            border: 2px solid var(--text);
+            padding: 40px;
+            background: rgba(0,0,0,0.9);
+            box-shadow: 0 0 30px rgba(255,255,255,0.05);
+            position: relative;
+        }
+        
+        /* มุมกรอบเท่ๆ */
+        .corner {
+            position: absolute; width: 10px; height: 10px; background: var(--text);
+        }
+        .tl { top: -5px; left: -5px; }
+        .tr { top: -5px; right: -5px; }
+        .bl { bottom: -5px; left: -5px; }
+        .br { bottom: -5px; right: -5px; }
+
+        input {
+            background: transparent;
+            border: none;
+            border-bottom: 2px solid var(--accent);
+            color: var(--text);
+            font-family: 'Rajdhani', sans-serif;
+            font-size: 1.5rem;
+            text-align: center;
+            width: 80%;
+            padding: 10px;
+            outline: none;
+            margin-bottom: 20px;
+        }
+        input:focus { border-color: var(--text); }
+
+        .btn-start {
+            background: var(--text);
+            color: var(--bg);
+            border: none;
+            padding: 15px 40px;
+            font-family: 'Press Start 2P', cursive;
+            font-size: 0.8rem;
+            cursor: pointer;
+            transition: 0.2s;
+        }
+        .btn-start:hover { transform: scale(1.05); }
+
+        /* --- GAME AREA --- */
+        #game-wrapper {
+            display: none;
+            width: 100%;
+            height: 100vh;
+            position: relative;
+            cursor: crosshair; /* เปลี่ยนเมาส์เป็นเป้าเล็ง */
+        }
+
+        /* กรอบพื้นที่เล่นเกม */
+        .game-boundary {
+            width: 80%;
+            height: 70%;
+            border: 1px dashed #333;
+            position: absolute;
+            top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            overflow: hidden; /* ห้ามเป้าล้นออก */
+        }
+
+        /* ตัวเป้า (Target) */
+        .target {
+            position: absolute;
+            border-radius: 50%;
+            background: radial-gradient(circle, #fff 30%, #000 31%, #000 50%, #fff 51%);
+            box-shadow: var(--target-glow);
+            cursor: crosshair;
+            transform: translate(-50%, -50%); /* จัดกึ่งกลางจุด */
+        }
+
+        .hud {
+            position: absolute;
+            top: 20px;
+            width: 100%;
+            text-align: center;
+            font-family: 'Press Start 2P';
+            font-size: 1rem;
+            pointer-events: none;
+        }
+
+        /* Loading / Success Overlay */
+        .overlay {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: #000;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            flex-direction: column;
+            z-index: 100;
+        }
+        .hidden { display: none !important; }
+
+    </style>
+</head>
+<body>
+
+    <div style="position:fixed; top:0; left:0; width:100%; height:100%; z-index:-1; 
+         background-image: linear-gradient(#222 1px, transparent 1px), linear-gradient(90deg, #222 1px, transparent 1px);
+         background-size: 40px 40px; opacity: 0.2;">
+    </div>
+
+    <div id="screen-login" class="container">
+        <div class="box-frame">
+            <div class="corner tl"></div><div class="corner tr"></div>
+            <div class="corner bl"></div><div class="corner br"></div>
+            
+            <h1 style="font-family: 'Press Start 2P'; font-size: 1.2rem; margin-bottom: 30px;">AIM CALIBRATION</h1>
+            <input type="text" id="username" placeholder="CODENAME" autocomplete="off">
+            <br>
+            <button class="btn-start" onclick="startGame()">START TEST</button>
+        </div>
+    </div>
+
+    <div id="game-wrapper">
+        <div class="hud">
+            TARGETS LEFT: <span id="score-counter" style="color: red;">5</span>
+        </div>
+        
+        <div class="game-boundary" id="arena">
+            </div>
+        
+        <div style="position: absolute; bottom: 20px; width: 100%; text-align: center; color: #444; font-size: 0.8rem;">
+            CLICK THE TARGETS AS FAST AS YOU CAN
+        </div>
+    </div>
+
+    <div id="screen-loading" class="overlay hidden">
+        <div style="font-family: 'Press Start 2P'; animation: blink 1s infinite;">CALIBRATING...</div>
+    </div>
+
+    <div id="screen-success" class="overlay hidden">
+        <h1 style="font-family: 'Press Start 2P'; font-size: 2rem; margin-bottom: 20px;">VERIFIED</h1>
+        <p>ACCURACY: 100%</p>
+        <p style="color: #666; font-size: 0.8rem; margin-top: 20px;">YOU MAY CLOSE THIS WINDOW</p>
+    </div>
+
+    <style> @keyframes blink { 50% { opacity: 0; } } </style>
+
+    <script>
+        // --- CONFIG ---
+        const TARGETS_TO_WIN = 5;
+        let targetsLeft = TARGETS_TO_WIN;
+        
+        const urlParams = new URLSearchParams(window.location.search);
+        const discordId = urlParams.get('id');
+        let username = "";
+        const arena = document.getElementById('arena');
+
+        // เริ่มเกม
+        function startGame() {
+            const inp = document.getElementById('username').value.trim();
+            if(!inp) {
+                gsap.to("input", { x: 10, duration: 0.1, yoyo: true, repeat: 5 });
+                return;
+            }
+            if (!discordId) return alert("ERROR: OPEN FROM DISCORD ONLY");
+
+            username = inp;
+
+            // Animation เปลี่ยนหน้า
+            gsap.to("#screen-login", {
+                opacity: 0, scale: 0.9, duration: 0.3,
+                onComplete: () => {
+                    document.getElementById('screen-login').classList.add('hidden');
+                    document.getElementById('game-wrapper').style.display = 'block';
+                    spawnTarget(); // เริ่มเสกเป้าแรก
+                }
+            });
+        }
+
+        // ฟังก์ชันสร้างเป้า (หัวใจหลัก)
+        function spawnTarget() {
+            if (targetsLeft <= 0) {
+                winGame();
+                return;
+            }
+
+            // 1. สร้าง Element เป้า
+            const target = document.createElement('div');
+            target.classList.add('target');
+
+            // 2. Random ความยาก (ขนาด)
+            // สุ่มขนาดระหว่าง 30px (เล็ก/ยาก) ถึง 80px (ใหญ่/ง่าย)
+            const size = Math.floor(Math.random() * 50) + 30; 
+            target.style.width = `${size}px`;
+            target.style.height = `${size}px`;
+
+            // 3. Random ตำแหน่ง (ให้อยู่ในกรอบเสมอ)
+            // คำนวณพื้นที่ที่วางได้ (ความกว้างกรอบ - ขนาดเป้า)
+            const maxX = arena.clientWidth - size;
+            const maxY = arena.clientHeight - size;
+            
+            const randomX = Math.floor(Math.random() * maxX);
+            const randomY = Math.floor(Math.random() * maxY);
+
+            target.style.left = `${randomX + (size/2)}px`; // +size/2 เพราะเรา translate(-50%) ไว้ใน CSS
+            target.style.top = `${randomY + (size/2)}px`;
+
+            // 4. ใส่ Event Click
+            target.onclick = () => {
+                hitTarget(target);
+            };
+
+            // 5. เอาเป้าไปแปะแล้ว Animate โผล่มา
+            arena.appendChild(target);
+            gsap.fromTo(target, 
+                { scale: 0, opacity: 0 }, 
+                { scale: 1, opacity: 1, duration: 0.3, ease: "back.out(1.7)" }
+            );
+        }
+
+        // เมื่อยิงโดน
+        function hitTarget(el) {
+            // เล่นเสียงเอฟเฟกต์ (ถ้ามี) หรือทำภาพกระพริบ
+            // ลดจำนวนเป้า
+            targetsLeft--;
+            document.getElementById('score-counter').innerText = targetsLeft;
+
+            // Animate เป้าแตก
+            gsap.to(el, {
+                scale: 1.5,
+                opacity: 0,
+                duration: 0.1,
+                onComplete: () => {
+                    el.remove(); // ลบออกจากหน้าจอ
+                    spawnTarget(); // เสกเป้าต่อไป
+                }
+            });
+        }
+
+        // ชนะเกม
+        function winGame() {
+            // พลุฉลอง
+            confetti({
+                particleCount: 150,
+                spread: 70,
+                origin: { y: 0.6 },
+                colors: ['#ffffff', '#888888']
+            });
+
+            submitData();
+        }
+
+        // ส่งข้อมูลให้บอท
+        async function submitData() {
+            document.getElementById('screen-loading').classList.remove('hidden');
+
+            try {
+                const res = await fetch('/api/verify', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ userId: discordId, username: username })
+                });
+                const data = await res.json();
+                
+                document.getElementById('screen-loading').classList.add('hidden');
+                
+                if(data.success) {
+                    document.getElementById('game-wrapper').style.display = 'none';
+                    document.getElementById('screen-success').classList.remove('hidden');
+                    confetti({ particleCount: 200, spread: 100, colors: ['#ffffff'] });
+                } else {
+                    alert("Error: " + data.message);
+                    location.reload();
+                }
+            } catch(e) {
+                alert("Connection Error");
+                location.reload();
+            }
+        }
+    </script>
+</body>
+</html>
