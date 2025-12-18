@@ -5,7 +5,7 @@ const {
     ActionRowBuilder, 
     ButtonBuilder, 
     ButtonStyle,
-    EmbedBuilder // <--- ต้องมีตัวนี้เพื่อสร้าง Embed สวยๆ
+    EmbedBuilder 
 } = require('discord.js');
 const express = require('express');
 const bodyParser = require('body-parser');
@@ -15,7 +15,6 @@ const fetch = require('node-fetch');
 // --- CONFIG ---
 const { DISCORD_TOKEN, GUILD_ID, VERIFIED_ROLE_ID, CLIENT_ID, CLIENT_SECRET, REDIRECT_URI, PORT, BASE_URL } = process.env;
 
-// ตรวจสอบค่า Config เบื้องต้น
 if (!DISCORD_TOKEN || !CLIENT_ID || !CLIENT_SECRET) {
     console.error("❌ Error: ข้อมูลใน .env ไม่ครบ");
     process.exit(1);
@@ -55,7 +54,6 @@ client.on('interactionCreate', async (interaction) => {
             return interaction.reply({ content: '❌ Permission Denied', ephemeral: true });
         }
 
-        // URL สำหรับ Login
         const oauthUrl = `https://discord.com/api/oauth2/authorize?client_id=${CLIENT_ID}&redirect_uri=${encodeURIComponent(REDIRECT_URI)}&response_type=code&scope=identify`;
 
         const row = new ActionRowBuilder()
@@ -89,7 +87,6 @@ app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-// ส่วนสำคัญ: Callback จาก Discord
 app.get('/auth/discord/callback', async (req, res) => {
     const { code } = req.query;
     if (!code) return res.send('No code provided');
@@ -109,7 +106,7 @@ app.get('/auth/discord/callback', async (req, res) => {
         });
 
         const tokenData = await tokenResponse.json();
-        if (tokenData.error) return res.send('Error: ' + JSON.stringify(tokenData));
+        if (tokenData.error) return res.send('Error getting token');
 
         const userResponse = await fetch('https://discord.com/api/users/@me', {
             headers: { authorization: `${tokenData.token_type} ${tokenData.access_token}` },
@@ -124,7 +121,7 @@ app.get('/auth/discord/callback', async (req, res) => {
     }
 });
 
-// ส่วนสำคัญ: API ให้ยศ + ส่ง DM
+// API ให้ยศ + ส่ง DM (ส่วนที่แก้ไข)
 app.post('/api/verify', async (req, res) => {
     const { userId, username } = req.body;
 
@@ -144,22 +141,37 @@ app.post('/api/verify', async (req, res) => {
                 throw new Error("Role Error");
             });
 
-            // 3. (ใหม่) ส่ง DM หาผู้ใช้ ✉️
-            const dmEmbed = new EmbedBuilder()
-                .setTitle('✅ ยืนยันตัวตนสำเร็จ!')
-                .setDescription(`ยินดีด้วยครับ คุณ **${username}** ได้รับการยืนยันตัวตนเรียบร้อยแล้ว\nขอให้สนุกกับการใช้งานเซิร์ฟเวอร์ครับ!`)
-                .setColor(0x57F287) // สีเขียวสวยๆ
-                .addFields({ 
-                    name: '🔗 Community Link', 
-                    value: '[คลิกเพื่อเข้าสู่ดิสคอร์ดหลัก](https://discord.gg/NaAX3K5mHF)' 
-                })
-                .setFooter({ text: 'Verified System', iconURL: guild.iconURL() })
-                .setTimestamp();
+            // 3. ส่ง DM หาผู้ใช้ (แต่งสวยเหมือนรูปตัวอย่าง) 📨
+            try {
+                const dmEmbed = new EmbedBuilder()
+                    .setColor(0xFF0000) // สีแดง
+                    .setTitle('VERIFICATION SUCCESS ⚠️') // หัวข้อใหญ่
+                    .setAuthor({ name: guild.name, iconURL: guild.iconURL() })
+                    .setDescription(`
+ยืนยันตัวตนรับยศเรียบร้อยแล้ว ❗️
 
-            // ส่ง DM (ใส่ catch เผื่อคนปิด DM บอทจะได้ไม่พัง)
-            await member.send({ embeds: [dmEmbed] }).catch(err => {
-                console.log(`ส่ง DM ไม่ได้ (ผู้ใช้อาจปิด DM): ${err.message}`);
-            });
+\`\`\`text
+รายละเอียดสิทธิพิเศษที่คุณได้รับ 🌐
+- ยินดีต้อนรับทุกท่าน 0x Discord
+- มี Script Five M มากมายทั้งฟรี และ เสียตัง
+- หากอยากได้ประสบการณ์ในการเปิด Server FiveM ทักได้เลย
+\`\`\`
+
+## 🥋 DISCORD
+
+https://discord.gg/NaAX3K5mHF
+
+📌 **PREVIEW**
+`)
+                    .setImage('https://img5.pic.in.th/file/secure-sv1/12c4ba8c-9a3e-45c2-99f3-37169bace988.png') // ⚠️ เปลี่ยนลิงก์รูปตรงนี้เป็นรูปที่คุณต้องการ
+                    .setFooter({ text: guild.name })
+                    .setTimestamp();
+
+                await member.send({ embeds: [dmEmbed] });
+                console.log(`Sent DM to ${username}`);
+            } catch (dmError) {
+                console.log(`Could not send DM to ${username}: User might have DMs closed.`);
+            }
 
             res.json({ success: true });
         } else {
